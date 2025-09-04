@@ -1,7 +1,7 @@
 # OWNER_ID is set to your Telegram ID (owner): 1850766719
 
 import os
-import sqlite3
+import psycopg2
 import asyncio
 from datetime import datetime, timedelta, timezone
 from typing import Dict
@@ -16,13 +16,17 @@ from telegram.ext import (ApplicationBuilder, ContextTypes, CommandHandler,
 
 # ---------------- CONFIG ----------------
 OWNER_ID = 1850766719  # твой ID - владелец бота
-#TOKEN = os.environ.get("TELEGRAM_TOKEN")  # поставь токен в ENV на Replit
-#TOKEN = os.environ["TELEGRAM_TOKEN"]
 TOKEN = os.getenv("TELEGRAM_TOKEN")
 if not TOKEN:
     raise ValueError("Не найден TELEGRAM_TOKEN! Добавь его в Railway → Variables")
 DB_PATH = "bot.db"
-
+DB_CONN = psycopg2.connect(
+    host=os.environ["PGHOST"],
+    port=os.environ.get("PGPORT", 5432),
+    user=os.environ["PGUSER"],
+    password=os.environ["PGPASSWORD"],
+    database=os.environ["PGDATABASE"]
+)
 # Two clans
 CLANS = ["BALDEG", "AlterEgo"]
 awaiting_custom_timer: Dict[str, Dict] = {}
@@ -60,112 +64,120 @@ boss_tasks: Dict[str, asyncio.Task] = {}
 
 
 # ---------------- Database ----------------
+# ---------------- Database ----------------
+DB_CONN = psycopg2.connect(
+    host=os.environ["PGHOST"],
+    port=os.environ.get("PGPORT", 5432),
+    user=os.environ["PGUSER"],
+    password=os.environ["PGPASSWORD"],
+    database=os.environ["PGDATABASE"]
+)
+
 def init_db():
-    conn = sqlite3.connect(DB_PATH, check_same_thread=False)
-    c = conn.cursor()
-    # users: telegram_id (unique), role ('user' or 'admin')
-    c.execute("""
-        CREATE TABLE IF NOT EXISTS users (
-            telegram_id INTEGER PRIMARY KEY,
-            role TEXT NOT NULL DEFAULT 'user'
-        )
+    """Создаёт таблицы пользователей и боссов, если их нет, и добавляет владельца."""
+    with DB_CONN.cursor() as c:
+        # Таблица пользователей
+        c.execute("""
+            CREATE TABLE IF NOT EXISTS users (
+                telegram_id BIGINT PRIMARY KEY,
+                role TEXT NOT NULL DEFAULT 'user'
+            )
         """)
 
-    # bosses: name (primary key), respawn_hours, last_killer (nullable), respawn_end_ts (nullable)
-    c.execute("""
-        CREATE TABLE IF NOT EXISTS bosses (
-            name TEXT PRIMARY KEY,
-            respawn_hours INTEGER NOT NULL,
-            last_killer TEXT,
-            respawn_end_ts INTEGER
-        )
+        # Таблица боссов
+        c.execute("""
+            CREATE TABLE IF NOT EXISTS bosses (
+                name TEXT PRIMARY KEY,
+                respawn_hours INTEGER NOT NULL,
+                last_killer TEXT,
+                respawn_end_ts BIGINT
+            )
         """)
 
-    # populate bosses table if empty
-    for name, hours in BOSSES.items():
-        c.execute(
-            "INSERT OR IGNORE INTO bosses (name, respawn_hours) VALUES (?, ?)",
-            (name, hours),
-        )
+        # Инициализация боссов
+        for name, hours in BOSSES.items():
+            c.execute("""
+                INSERT INTO bosses (name, respawn_hours)
+                VALUES (%s, %s)
+                ON CONFLICT (name) DO NOTHING
+            """, (name, hours))
 
-    # ensure owner exists as admin
-    c.execute(
-        "INSERT OR IGNORE INTO users (telegram_id, role) VALUES (?, ?)",
-        (OWNER_ID, "admin"),
-    )
+        # Добавление владельца как админа
+        c.execute("""
+            INSERT INTO users (telegram_id, role)
+            VALUES (%s, %s)
+            ON CONFLICT (telegram_id) DO NOTHING
+        """, (OWNER_ID, "admin"))
 
-    conn.commit()
-    return conn
-
-
-db_conn = init_db()
+    DB_CONN.commit()
 
 
+# Инициализация базы при старте
+init_db()
+
+
+# ---------------- Функции для работы с базой ----------------
 def add_user_if_not_exists(telegram_id: int):
-    c = db_conn.cursor()
-    c.execute("SELECT telegram_id FROM users WHERE telegram_id = ?",
-              (telegram_id, ))
-    if c.fetchone() is None:
-        c.execute("INSERT INTO users (telegram_id, role) VALUES (?, ?)",
-                  (telegram_id, "user"))
-        db_conn.commit()
+    with DB_CONN.cursor() as c:
+        c.execute("SELECT telegram_id FROM users WHERE telegram_id = %s", (telegram_id,))
+        if c.fetchone() is None:
+            c.execute("INSERT INTO users (telegram_id, role) VALUES (%s, %s)", (telegram_id, "user"))
+    DB_CONN.commit()
 
 
 def set_admin(telegram_id: int):
-    c = db_conn.cursor()
-    c.execute(
-        "INSERT OR REPLACE INTO users (telegram_id, role) VALUES (?, ?)",
-        (telegram_id, "admin"),
-    )
-    db_conn.commit()
+    with DB_CONN.cursor() as c:
+        c.execute("""
+            INSERT INTO users (telegram_id, role)
+            VALUES (%s, %s)
+            ON CONFLICT (telegram_id) DO UPDATE SET role = EXCLUDED.role
+        """, (telegram_id, "admin"))
+    DB_CONN.commit()
 
 
 def is_admin(telegram_id: int) -> bool:
     if telegram_id == OWNER_ID:
         return True
-    c = db_conn.cursor()
-    c.execute("SELECT role FROM users WHERE telegram_id = ?", (telegram_id, ))
-    r = c.fetchone()
+    with DB_CONN.cursor() as c:
+        c.execute("SELECT role FROM users WHERE telegram_id = %s", (telegram_id,))
+        r = c.fetchone()
     return r is not None and r[0] == "admin"
 
 
 def get_all_user_ids():
-    c = db_conn.cursor()
-    c.execute("SELECT telegram_id FROM users")
-    return [row[0] for row in c.fetchall()]
+    with DB_CONN.cursor() as c:
+        c.execute("SELECT telegram_id FROM users")
+        return [row[0] for row in c.fetchall()]
 
 
-def set_boss_killer_and_respawn(boss_name: str, killer: str,
-                                respawn_end_ts: int):
-    c = db_conn.cursor()
-    c.execute(
-        "UPDATE bosses SET last_killer = ?, respawn_end_ts = ? WHERE name = ?",
-        (killer, respawn_end_ts, boss_name),
-    )
-    db_conn.commit()
+def set_boss_killer_and_respawn(boss_name: str, killer: str, respawn_end_ts: int):
+    with DB_CONN.cursor() as c:
+        c.execute("""
+            UPDATE bosses
+            SET last_killer = %s, respawn_end_ts = %s
+            WHERE name = %s
+        """, (killer, respawn_end_ts, boss_name))
+    DB_CONN.commit()
 
 
 def get_boss_info(boss_name: str):
-    c = db_conn.cursor()
-    c.execute(
-        "SELECT respawn_hours, last_killer, respawn_end_ts FROM bosses WHERE name = ?",
-        (boss_name, ),
-    )
-    row = c.fetchone()
+    with DB_CONN.cursor() as c:
+        c.execute("""
+            SELECT respawn_hours, last_killer, respawn_end_ts
+            FROM bosses
+            WHERE name = %s
+        """, (boss_name,))
+        row = c.fetchone()
     if row:
-        return {
-            "respawn_hours": row[0],
-            "last_killer": row[1],
-            "respawn_end_ts": row[2]
-        }
+        return {"respawn_hours": row[0], "last_killer": row[1], "respawn_end_ts": row[2]}
     return None
 
 
 def get_all_bosses():
-    c = db_conn.cursor()
-    c.execute(
-        "SELECT name, respawn_hours, last_killer, respawn_end_ts FROM bosses")
-    return c.fetchall()
+    with DB_CONN.cursor() as c:
+        c.execute("SELECT name, respawn_hours, last_killer, respawn_end_ts FROM bosses")
+        return c.fetchall()
+
 
 
 # ---------------- Utilities ----------------
@@ -702,6 +714,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-
-
