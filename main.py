@@ -17,7 +17,10 @@ from telegram.ext import (ApplicationBuilder, ContextTypes, CommandHandler,
 # ---------------- CONFIG ----------------
 OWNER_ID = 1850766719  # твой ID - владелец бота
 #TOKEN = os.environ.get("TELEGRAM_TOKEN")  # поставь токен в ENV на Replit
-TOKEN = os.environ["TELEGRAM_TOKEN"]
+#TOKEN = os.environ["TELEGRAM_TOKEN"]
+TOKEN = os.getenv("TELEGRAM_TOKEN")
+if not TOKEN:
+    raise ValueError("Не найден TELEGRAM_TOKEN! Добавь его в Railway → Variables")
 DB_PATH = "bot.db"
 
 # Two clans
@@ -699,5 +702,6 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
