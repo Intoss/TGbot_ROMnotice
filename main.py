@@ -18,6 +18,7 @@ from telegram.ext import (ApplicationBuilder, ContextTypes, CommandHandler,
 OWNER_ID = 1850766719  # твой ID - владелец бота
 TOKEN = os.getenv("TELEGRAM_TOKEN")
 GROUP_CHAT_ID = int(os.getenv("GROUP_CHAT_ID", "0"))
+BOSS_TOPIC_ID = int(os.getenv("BOSS_TOPIC_ID", "0"))
 
 if not TOKEN:
     raise ValueError("Не найден TELEGRAM_TOKEN! Добавь его в Railway → Variables")
@@ -552,7 +553,9 @@ async def custom_timer_input_handler(update: Update,
 # ---------------- Background task for respawn reminders ----------------
 async def boss_respawn_task(application, boss_name: str, respawn_ts: int):
     """
-    Ждёт до (respawn_ts - 10 минут) → шлёт предупреждение (всем юзерам + в группу).
+    Ждёт до (respawn_ts - 10 минут) → шлёт предупреждение:
+    - всем пользователям
+    - в тему "Босс" суперчата
     Потом ждёт до respawn_ts → уведомление о респавне (только юзерам).
     """
     try:
@@ -578,16 +581,19 @@ async def boss_respawn_task(application, boss_name: str, respawn_ts: int):
             # всем пользователям
             await broadcast_message(application, text)
 
-            # отдельно в группу/канал
+            # только в топик "Босс"
             if GROUP_CHAT_ID:
                 try:
-                    await application.bot.send_message(
-                        chat_id=GROUP_CHAT_ID,
-                        text=text,
-                        parse_mode="HTML"
-                    )
+                    BOSS_TOPIC_ID = int(os.getenv("BOSS_TOPIC_ID", 0))
+                    if BOSS_TOPIC_ID:
+                        await application.bot.send_message(
+                            chat_id=GROUP_CHAT_ID,
+                            message_thread_id=BOSS_TOPIC_ID,
+                            text=text,
+                            parse_mode="HTML"
+                        )
                 except Exception as e:
-                    print(f"Ошибка отправки в группу: {e}")
+                    print(f"Ошибка отправки в топик 'Босс': {e}")
 
         # --- точное время респавна ---
         now_ts = int(datetime.now().timestamp())
@@ -725,7 +731,6 @@ def main():
 
 if __name__ == "__main__":
     main()
-
 
 
 
