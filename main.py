@@ -22,13 +22,6 @@ GROUP_CHAT_ID = int(os.getenv("GROUP_CHAT_ID", "0"))
 if not TOKEN:
     raise ValueError("Не найден TELEGRAM_TOKEN! Добавь его в Railway → Variables")
 DB_PATH = "bot.db"
-DB_CONN = psycopg2.connect(
-    host=os.environ.get("PGHOST"),
-    port=int(os.environ.get("PGPORT", 5432)),  # по умолчанию 5432
-    user=os.environ.get("PGUSER"),
-    password=os.environ.get("PGPASSWORD"),
-    database=os.environ.get("PGDATABASE")
-)
     
 # Two clans
 CLANS = ["BALDEG", "AlterEgo"]
@@ -67,11 +60,11 @@ boss_tasks: Dict[str, asyncio.Task] = {}
 
 # ---------------- Database ----------------
 DB_CONN = psycopg2.connect(
-    host=os.environ.get["PGHOST"],
-    port=os.environ.get("PGPORT", 5432),
-    user=os.environ["PGUSER"],
-    password=os.environ["PGPASSWORD"],
-    database=os.environ["PGDATABASE"]
+    host=os.environ.get("PGHOST"),
+    port=int(os.environ.get("PGPORT", 5432)),
+    user=os.environ.get("PGUSER"),
+    password=os.environ.get("PGPASSWORD"),
+    database=os.environ.get("PGDATABASE")
 )
 
 def init_db():
@@ -732,6 +725,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
