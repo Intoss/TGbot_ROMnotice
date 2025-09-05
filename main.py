@@ -698,12 +698,12 @@ async def on_startup(application):
 async def restore_boss_tasks(application):
     now_ts = int(datetime.now().timestamp())
     for name, hours, last_killer, respawn_end_ts in get_all_bosses():
-        if respawn_end_ts and respawn_end_ts > now_ts:
-            # создаем background task
+        if respawn_end_ts:
             task = asyncio.create_task(
-                boss_respawn_task(application, name, respawn_end_ts))
+                boss_respawn_task(application, name, respawn_end_ts)
+            )
             boss_tasks[name] = task
-
+            print(f"[restore] {name}: задача восстановлена (respawn_ts={respawn_end_ts}, now={now_ts})")
 
 async def set_commands(application):
     commands = [
@@ -746,6 +746,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
