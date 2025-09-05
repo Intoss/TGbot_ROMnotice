@@ -202,9 +202,14 @@ def build_menu_keyboard():
     for name, hours in BOSSES.items():
         info = get_boss_info(name)
         last = info["last_killer"] if info and info["last_killer"] else "—"
-        respawn_ts = info[
-            "respawn_end_ts"] if info and info["respawn_end_ts"] else None
-        respawn_text = format_datetime_ts(respawn_ts) if respawn_ts else "—"
+        now_ts = int(datetime.now().timestamp())
+
+        respawn_ts = info["respawn_end_ts"] if info and info["respawn_end_ts"] else None
+        if respawn_ts and respawn_ts > now_ts:
+            respawn_text = format_datetime_ts(respawn_ts)
+        else:
+            respawn_text = "-"
+            respawn_ts = None
 
         # очередь клана
         queue_clan = None
