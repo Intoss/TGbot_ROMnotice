@@ -27,7 +27,7 @@ DB_CONN = psycopg2.connect(
     user=os.environ.get("PGUSER"),
     password=os.environ.get("PGPASSWORD"),
     database=os.environ.get("PGDATABASE"),
-    host=os.environ.get("PGHOST"),
+    host=os.environ.get("PGHOST")
     )
     
 # Two clans
@@ -732,3 +732,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
