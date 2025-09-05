@@ -1,4 +1,4 @@
-Х# OWNER_ID is set to your Telegram ID (owner): 1850766719
+# OWNER_ID is set to your Telegram ID (owner): 1850766719
 
 import os
 import psycopg2
@@ -732,5 +732,6 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
