@@ -562,16 +562,27 @@ async def custom_timer_input_handler(update: Update,
 # ---------------- Background task for respawn reminders ----------------
 async def boss_respawn_task(application, boss_name: str, respawn_ts: int):
     """
-    Ждёт до (respawn_ts - 10 минут) → шлёт предупреждение:
-    - всем пользователям
-    - в тему "Босс" суперчата
-    Потом ждёт до respawn_ts → уведомление о респавне (только юзерам).
+    Управляет уведомлениями:
+    - Если до босса >10 минут → создаёт предупреждение и респавн.
+    - Если <10 минут → только респавн.
+    - Если уже прошло → сразу уведомление и очистка.
     """
     try:
         now_ts = int(datetime.now().timestamp())
-        warn_ts = respawn_ts - 10 * 60  # за 10 минут до респавна
+        warn_ts = respawn_ts - 10 * 60
 
-        # --- 10-минутное предупреждение ---
+        if respawn_ts <= now_ts:
+            # Уже прошло → сразу уведомляем
+            emoji_revive = "⚔️"
+            text = f"{emoji_revive} {boss_name} теперь снова доступен для убийства!"
+            await broadcast_message(application, text)
+
+            info = get_boss_info(boss_name)
+            set_boss_killer_and_respawn(boss_name, info["last_killer"], None)
+            print(f"[task] {boss_name}: время прошло, уведомление отправлено, таймер очищен.")
+            return
+
+        # --- предупреждение, если оно ещё актуально ---
         if warn_ts > now_ts:
             await asyncio.sleep(warn_ts - now_ts)
 
@@ -587,45 +598,40 @@ async def boss_respawn_task(application, boss_name: str, respawn_ts: int):
             if queue_clan:
                 text += f"\nОчередь клана - {queue_clan}."
 
-            # всем пользователям
+            # уведомление пользователям
             await broadcast_message(application, text)
 
-            # только в топик "Босс"
-            if GROUP_CHAT_ID:
+            # уведомление в топик "Босс"
+            if GROUP_CHAT_ID and BOSS_TOPIC_ID:
                 try:
-                    BOSS_TOPIC_ID = int(os.getenv("BOSS_TOPIC_ID", 0))
-                    if BOSS_TOPIC_ID:
-                        await application.bot.send_message(
-                            chat_id=GROUP_CHAT_ID,
-                            message_thread_id=BOSS_TOPIC_ID,
-                            text=text,
-                            parse_mode="HTML"
-                        )
+                    await application.bot.send_message(
+                        chat_id=GROUP_CHAT_ID,
+                        message_thread_id=BOSS_TOPIC_ID,
+                        text=text,
+                        parse_mode="HTML"
+                    )
                 except Exception as e:
-                    print(f"Ошибка отправки в топик 'Босс': {e}")
+                    print(f"Ошибка отправки в топик: {e}")
 
-        # --- точное время респавна ---
+        # --- респавн ---
         now_ts = int(datetime.now().timestamp())
         if respawn_ts > now_ts:
             await asyncio.sleep(respawn_ts - now_ts)
 
         emoji_revive = "⚔️"
         text = f"{emoji_revive} {boss_name} теперь снова доступен для убийства!"
-
-        # уведомление о респавне идёт только юзерам
         await broadcast_message(application, text)
 
-        # очищаем respawn_end_ts, оставляем last_killer
+        # очищаем respawn_end_ts
         info = get_boss_info(boss_name)
         set_boss_killer_and_respawn(boss_name, info["last_killer"], None)
+
+        print(f"[task] {boss_name}: респавн обработан, таймер очищен.")
 
     except asyncio.CancelledError:
         return
     except Exception as e:
         print(f"Ошибка в boss_respawn_task: {e}")
-        return
-
-
 
 async def custom_timer_input_handler(update: Update,
                                      context: ContextTypes.DEFAULT_TYPE):
@@ -740,6 +746,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
