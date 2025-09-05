@@ -1,4 +1,4 @@
-# OWNER_ID is set to your Telegram ID (owner): 1850766719
+Х# OWNER_ID is set to your Telegram ID (owner): 1850766719
 
 import os
 import psycopg2
@@ -23,11 +23,11 @@ if not TOKEN:
     raise ValueError("Не найден TELEGRAM_TOKEN! Добавь его в Railway → Variables")
 DB_PATH = "bot.db"
 DB_CONN = psycopg2.connect(
-    port=os.environ.get("PGPORT"),
-    user=os.environ.get("PGUSER"),
-    password=os.environ.get("PGPASSWORD"),
-    database=os.environ.get("PGDATABASE"),
-    host=os.environ.get("PGHOST")
+    port=os.environ.get["PGPORT"],
+    user=os.environ.get["PGUSER"],
+    password=os.environ.get["PGPASSWORD"],
+    database=os.environ.get["PGDATABASE"],
+    host=os.environ.get["PGHOST"]
     )
     
 # Two clans
@@ -732,4 +732,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
