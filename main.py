@@ -741,11 +741,13 @@ def main():
     app.add_handler(CallbackQueryHandler(callback_query_handler))
 
     print("Bot starting...")
-    app.run_polling()
+    app.run_polling(close_loop=False, on_startup=on_startup)
+    print(f"[task start] {boss_name}: respawn_ts={respawn_ts}, now={int(datetime.now().timestamp())}")
 
 
 if __name__ == "__main__":
     main()
+
 
 
 
