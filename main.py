@@ -740,13 +740,16 @@ def main():
     # CallbackQuery handler for buttons
     app.add_handler(CallbackQueryHandler(callback_query_handler))
 
+    
+    app = ApplicationBuilder().token(TOKEN).build()
+    app.post_init(post_init)
     print("Bot starting...")
-    app.run_polling(close_loop=False, on_startup=on_startup)
     print(f"[task start] {boss_name}: respawn_ts={respawn_ts}, now={int(datetime.now().timestamp())}")
 
 
 if __name__ == "__main__":
     main()
+
 
 
 
