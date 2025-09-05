@@ -745,11 +745,11 @@ def main():
     app.add_handler(CallbackQueryHandler(callback_query_handler))
 
     print("Bot starting...")
-    print(f"[task start] {boss_name}: respawn_ts={respawn_ts}, now={int(datetime.now().timestamp())}")
     app.run_polling()  # здесь больше никаких on_startup/post_init не нужно
  
 if __name__ == "__main__":
     main()
+
 
 
 
