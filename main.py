@@ -718,37 +718,39 @@ async def set_commands(application):
     await application.bot.set_chat_menu_button(
         menu_button=MenuButtonCommands())
 
-
+async def post_init(application):
+    # Устанавливаем команды
+    await set_commands(application)
+    # Восстанавливаем таймеры боссов после перезапуска
+    await restore_boss_tasks(application)
+    # Можно расслать уведомление о рестарте
+    await broadcast_message(application, "Меню боссов восстановлено после перезапуска")
+    
 def main():
     if not TOKEN:
         print("ERROR: TELEGRAM_TOKEN env var not set.")
         return
 
-    app = ApplicationBuilder().token(TOKEN).post_init(set_commands).build()
+    # Создаём приложение один раз и сразу передаём post_init
+    app = ApplicationBuilder().token(TOKEN).post_init(post_init).build()
 
-    # Commands
+    # Регистрируем обработчики
     app.add_handler(CommandHandler("start", start_handler))
     app.add_handler(CommandHandler("menu", menu_handler))
     app.add_handler(CommandHandler("add_admin", add_admin_handler))
     app.add_handler(CommandHandler("help", help_handler))
     app.add_handler(
-        MessageHandler(
-            filters.TEXT & ~filters.
-            COMMAND,  # ловим все текстовые сообщения, которые не команды
-            custom_timer_input_handler  # твой обработчик
-        ))
-    # CallbackQuery handler for buttons
+        MessageHandler(filters.TEXT & ~filters.COMMAND, custom_timer_input_handler)
+    )
     app.add_handler(CallbackQueryHandler(callback_query_handler))
 
-    
-    app = ApplicationBuilder().token(TOKEN).build()
-    app.post_init(post_init)
     print("Bot starting...")
     print(f"[task start] {boss_name}: respawn_ts={respawn_ts}, now={int(datetime.now().timestamp())}")
-
-
+    app.run_polling()  # здесь больше никаких on_startup/post_init не нужно
+ 
 if __name__ == "__main__":
     main()
+
 
 
 
