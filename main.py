@@ -23,12 +23,12 @@ if not TOKEN:
     raise ValueError("Не найден TELEGRAM_TOKEN! Добавь его в Railway → Variables")
 DB_PATH = "bot.db"
 DB_CONN = psycopg2.connect(
-    port=os.environ.get["PGPORT"],
-    user=os.environ.get["PGUSER"],
-    password=os.environ.get["PGPASSWORD"],
-    database=os.environ.get["PGDATABASE"],
-    host=os.environ.get["PGHOST"]
-    )
+    host=os.environ.get("PGHOST"),
+    port=int(os.environ.get("PGPORT", 5432)),  # по умолчанию 5432
+    user=os.environ.get("PGUSER"),
+    password=os.environ.get("PGPASSWORD"),
+    database=os.environ.get("PGDATABASE")
+)
     
 # Two clans
 CLANS = ["BALDEG", "AlterEgo"]
@@ -732,6 +732,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
