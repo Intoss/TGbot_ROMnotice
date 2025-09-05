@@ -17,6 +17,8 @@ from telegram.ext import (ApplicationBuilder, ContextTypes, CommandHandler,
 # ---------------- CONFIG ----------------
 OWNER_ID = 1850766719  # твой ID - владелец бота
 TOKEN = os.getenv("TELEGRAM_TOKEN")
+GROUP_CHAT_ID = int(os.getenv("GROUP_CHAT_ID", "0"))
+
 if not TOKEN:
     raise ValueError("Не найден TELEGRAM_TOKEN! Добавь его в Railway → Variables")
 DB_PATH = "bot.db"
@@ -62,11 +64,9 @@ BOSSES = {
 # In-memory running tasks (boss_key -> asyncio.Task)
 boss_tasks: Dict[str, asyncio.Task] = {}
 
-
-# ---------------- Database ----------------
 # ---------------- Database ----------------
 DB_CONN = psycopg2.connect(
-    host=os.environ["PGHOST"],
+    host=os.environ.get["PGHOST"],
     port=os.environ.get("PGPORT", 5432),
     user=os.environ["PGUSER"],
     password=os.environ["PGPASSWORD"],
@@ -558,16 +558,17 @@ async def custom_timer_input_handler(update: Update,
 # ---------------- Background task for respawn reminders ----------------
 async def boss_respawn_task(application, boss_name: str, respawn_ts: int):
     """
-    Wait until (respawn_ts - 10 minutes) -> send 10-min warning
-    Then wait until respawn -> notify resurrected
+    Ждёт до (respawn_ts - 10 минут) → шлёт предупреждение (всем юзерам + в группу).
+    Потом ждёт до respawn_ts → уведомление о респавне (только юзерам).
     """
     try:
         now_ts = int(datetime.now().timestamp())
-        warn_ts = respawn_ts - 10 * 60  # 10 minutes before
+        warn_ts = respawn_ts - 10 * 60  # за 10 минут до респавна
+
+        # --- 10-минутное предупреждение ---
         if warn_ts > now_ts:
             await asyncio.sleep(warn_ts - now_ts)
 
-            # 10-минутное уведомление
             info = get_boss_info(boss_name)
             last_killer = info["last_killer"] if info else None
 
@@ -579,26 +580,42 @@ async def boss_respawn_task(application, boss_name: str, respawn_ts: int):
             text = f"{emoji_alarm} {boss_name}, воскреснет через 10 минут."
             if queue_clan:
                 text += f"\nОчередь клана - {queue_clan}."
+
+            # всем пользователям
             await broadcast_message(application, text)
 
-        # ждать точное время воскресения
+            # отдельно в группу/канал
+            if GROUP_CHAT_ID:
+                try:
+                    await application.bot.send_message(
+                        chat_id=GROUP_CHAT_ID,
+                        text=text,
+                        parse_mode="HTML"
+                    )
+                except Exception as e:
+                    print(f"Ошибка отправки в группу: {e}")
+
+        # --- точное время респавна ---
         now_ts = int(datetime.now().timestamp())
         if respawn_ts > now_ts:
             await asyncio.sleep(respawn_ts - now_ts)
 
-        # уведомление о воскресении
         emoji_revive = "⚔️"
         text = f"{emoji_revive} {boss_name} теперь снова доступен для убийства!"
+
+        # уведомление о респавне идёт только юзерам
         await broadcast_message(application, text)
 
-        # очищаем только respawn_end_ts, сохраняем last_killer
+        # очищаем respawn_end_ts, оставляем last_killer
         info = get_boss_info(boss_name)
         set_boss_killer_and_respawn(boss_name, info["last_killer"], None)
 
     except asyncio.CancelledError:
         return
-    except Exception:
+    except Exception as e:
+        print(f"Ошибка в boss_respawn_task: {e}")
         return
+
 
 
 async def custom_timer_input_handler(update: Update,
