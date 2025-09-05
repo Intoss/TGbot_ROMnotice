@@ -504,6 +504,10 @@ async def custom_timer_input_handler(update: Update,
     if not user or not is_admin(user.id):
         return
 
+    # Игнорируем сообщения из топиков/групп
+    if update.effective_chat.type in ("group", "supergroup") and update.effective_chat.id != user.id:
+        return
+        
     text = update.message.text.strip()
     if not text.isdigit():
         await update.message.reply_text("❌ Нужно ввести число минут.")
